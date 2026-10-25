@@ -14,8 +14,10 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
  * Предмет и рука от первого лица рисуются в HeldItemRenderer.renderFirstPersonItem().
- * Трансформацию ViewModel кладём в самое начало метода, до ванильных сдвигов и анимаций,
- * поэтому замах и подъём предмета работают как обычно, уже внутри изменённой матрицы.
+ * Трансформацию ViewModel кладём сразу после ванильного matrices.push(), до сдвигов и
+ * анимаций руки. Один и тот же MatrixStack используется для обеих рук, поэтому применять
+ * трансформацию снаружи push нельзя: она осталась бы в матрице и наложилась второй раз
+ * на отрисовку другой руки. Внутри push/pop у каждой руки своя независимая трансформация.
  *
  * Аргументы метода берём по типу через @Local(argsOnly): так миксину не нужна точная
  * сигнатура, которая в 1.21.x менялась из-за переработки рендера.
@@ -24,8 +26,13 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 public abstract class HeldItemRendererMixin {
 
     @Inject(
-        method = "renderFirstPersonItem",
-        at = @At("HEAD")
+            method = "renderFirstPersonItem",
+            at = @At(
+                    value = "INVOKE",
+                    target = "Lnet/minecraft/client/util/math/MatrixStack;push()V",
+                    ordinal = 0,
+                    shift = At.Shift.AFTER
+            )
     )
     private void ami$applyViewModel(
             CallbackInfo ci,
