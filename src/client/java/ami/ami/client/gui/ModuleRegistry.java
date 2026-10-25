@@ -12,12 +12,33 @@ public final class ModuleRegistry {
     private static final List<ModuleEntry> MODULES = List.of(
             new ModuleEntry(
                     "triggerbot", "Triggerbot", "TB", ModuleEntry.Category.COMBAT,
-                    "Swings automatically at the player under your crosshair. Respects the vanilla attack "
-                            + "cooldown and can hold the swing for a falling critical hit, including the "
-                            + "fall after knockback.",
+                    "Swings automatically at the target under your crosshair. Choose which targets are "
+                            + "allowed, pause while eating or blocking, respect the vanilla attack cooldown "
+                            + "and hold the swing for a falling critical hit, including the fall after knockback.",
                     () -> TriggerBotModule.enabled,
                     value -> TriggerBotModule.enabled = value,
                     List.of(
+                            new BoolSetting("Don't hit while eating", "Pause swings while you are eating food",
+                                    () -> TriggerBotModule.noHitWhileEating,
+                                    value -> TriggerBotModule.noHitWhileEating = value),
+                            new BoolSetting("Don't hit while blocking", "Pause swings while you are blocking with a shield",
+                                    () -> TriggerBotModule.noHitWhileBlocking,
+                                    value -> TriggerBotModule.noHitWhileBlocking = value),
+                            new BoolSetting("Target players", "Players wearing at least one piece of armor",
+                                    () -> TriggerBotModule.targetPlayers,
+                                    value -> TriggerBotModule.targetPlayers = value),
+                            new BoolSetting("Target naked players", "Players with no armor on at all",
+                                    () -> TriggerBotModule.targetNakedPlayers,
+                                    value -> TriggerBotModule.targetNakedPlayers = value),
+                            new BoolSetting("Target animals", "Cows, pigs, sheep and other passive animals",
+                                    () -> TriggerBotModule.targetAnimals,
+                                    value -> TriggerBotModule.targetAnimals = value),
+                            new BoolSetting("Target monsters", "Hostile mobs such as zombies and skeletons",
+                                    () -> TriggerBotModule.targetMonsters,
+                                    value -> TriggerBotModule.targetMonsters = value),
+                            new BoolSetting("Target invisible", "Allow swings at invisible targets; off skips them",
+                                    () -> TriggerBotModule.targetInvisible,
+                                    value -> TriggerBotModule.targetInvisible = value),
                             new BoolSetting("Only crits", "Never swing unless falling",
                                     () -> TriggerBotModule.onlyCrits,
                                     value -> TriggerBotModule.onlyCrits = value),
