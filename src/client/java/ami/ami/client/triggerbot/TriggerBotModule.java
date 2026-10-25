@@ -1,9 +1,17 @@
 package ami.ami.client.triggerbot;
 
 import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.network.AbstractClientPlayerEntity;
 import net.minecraft.client.network.ClientPlayerEntity;
+import net.minecraft.component.DataComponentTypes;
+import net.minecraft.entity.Entity;
+import net.minecraft.entity.EquipmentSlot;
+import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.effect.StatusEffects;
+import net.minecraft.entity.mob.Monster;
+import net.minecraft.entity.passive.AnimalEntity;
+import net.minecraft.entity.player.PlayerEntity;
+import net.minecraft.item.ItemStack;
+import net.minecraft.item.Items;
 import net.minecraft.network.packet.c2s.play.ClientCommandC2SPacket;
 import net.minecraft.util.Hand;
 import net.minecraft.util.hit.HitResult;
@@ -13,7 +21,7 @@ import net.minecraft.util.math.Vec3d;
 import java.util.Optional;
 
 /**
- * Логика triggerbot под механику боя 1.9+: бьёт игрока под прицелом.
+ * Логика triggerbot под механику боя 1.9+: бьёт цель под прицелом (типы целей задаются в настройках).
  * Миксины только вызывают tick() и onKnockback().
  *
  * Что важно для крита в 1.9+ (PlayerEntity.attack):
@@ -52,6 +60,27 @@ public final class TriggerBotModule {
      * и выпускается в первый тик падения.
      */
     public static boolean recoilCrits = true;
+
+    /** Не бить, пока игрок ест (активный предмет с компонентом еды). */
+    public static boolean noHitWhileEating = true;
+
+    /** Не бить, пока игрок закрывается щитом (в том числе в первые тики подъёма щита). */
+    public static boolean noHitWhileBlocking = true;
+
+    /** Бить игроков, на которых надета хотя бы одна часть брони. */
+    public static boolean targetPlayers = true;
+
+    /** Бить игроков без брони (все четыре слота брони пусты). */
+    public static boolean targetNakedPlayers = true;
+
+    /** Бить животных (AnimalEntity: коровы, свиньи, овцы и т.д.). */
+    public static boolean targetAnimals = false;
+
+    /** Бить враждебных мобов (всё, что реализует Monster). */
+    public static boolean targetMonsters = false;
+
+    /** Бить невидимые цели. Если выключено - невидимые существа пропускаются. */
+    public static boolean targetInvisible = true;
 
     /**
      * Порог заряда для крита. Крит в ванили требует заряд > 0.9, так что ждать
@@ -98,10 +127,16 @@ public final class TriggerBotModule {
         if (!player.isAlive() || player.isSpectator()) {
             return;
         }
+        if (noHitWhileEating && isEating(player)) {
+            return;
+        }
+        if (noHitWhileBlocking && isBlocking(player)) {
+            return;
+        }
 
         // Свежий рейкаст в этом же тике от текущей позиции глаз до хитбокса.
         // mc.crosshairTarget тут отстаёт на тик и режет дистанцию, поэтому он не используется.
-        AbstractClientPlayerEntity target = findTarget(mc, player);
+        Entity target = findTarget(mc, player);
         if (target == null) {
             return;
         }
@@ -137,17 +172,67 @@ public final class TriggerBotModule {
         attack(mc, player, target, false);
     }
 
-    /** Ближайший игрок, в которого упирается взгляд в пределах reach. */
-    private static AbstractClientPlayerEntity findTarget(MinecraftClient mc, ClientPlayerEntity player) {
+    /** Игрок сейчас ест: держит активный предмет, у которого есть компонент еды. */
+    private static boolean isEating(ClientPlayerEntity player) {
+        if (!player.isUsingItem()) {
+            return false;
+        }
+        ItemStack active = player.getActiveItem();
+        return !active.isEmpty() && active.contains(DataComponentTypes.FOOD);
+    }
+
+    /**
+     * Игрок закрывается щитом. isBlocking() срабатывает только после небольшой задержки
+     * подъёма щита, поэтому дополнительно смотрим на сам активный предмет.
+     */
+    private static boolean isBlocking(ClientPlayerEntity player) {
+        if (player.isBlocking()) {
+            return true;
+        }
+        return player.isUsingItem() && player.getActiveItem().isOf(Items.SHIELD);
+    }
+
+    /** Подходит ли существо под выбранные в настройках типы целей. */
+    private static boolean isValidTarget(Entity entity) {
+        if (!(entity instanceof LivingEntity living) || !living.isAlive() || living.isSpectator()) {
+            return false;
+        }
+        if (!targetInvisible && living.isInvisible()) {
+            return false;
+        }
+        if (living instanceof PlayerEntity) {
+            return isNaked(living) ? targetNakedPlayers : targetPlayers;
+        }
+        if (living instanceof Monster) {
+            return targetMonsters;
+        }
+        if (living instanceof AnimalEntity) {
+            return targetAnimals;
+        }
+        return false;
+    }
+
+    /** Голый: во всех четырёх слотах брони пусто. */
+    private static boolean isNaked(LivingEntity entity) {
+        return entity.getEquippedStack(EquipmentSlot.HEAD).isEmpty()
+                && entity.getEquippedStack(EquipmentSlot.CHEST).isEmpty()
+                && entity.getEquippedStack(EquipmentSlot.LEGS).isEmpty()
+                && entity.getEquippedStack(EquipmentSlot.FEET).isEmpty();
+    }
+
+    /** Ближайшая подходящая цель, в которую упирается взгляд в пределах reach. */
+    private static Entity findTarget(MinecraftClient mc, ClientPlayerEntity player) {
         Vec3d eye = player.getEyePos();
         Vec3d end = eye.add(player.getRotationVec(1.0f).multiply(reach));
 
-        AbstractClientPlayerEntity best = null;
+        // Берём только существ вокруг луча, а не весь мир.
+        Box searchBox = player.getBoundingBox()
+                .stretch(player.getRotationVec(1.0f).multiply(reach))
+                .expand(1.0);
+
+        Entity best = null;
         double bestDistSq = Double.MAX_VALUE;
-        for (AbstractClientPlayerEntity other : mc.world.getPlayers()) {
-            if (other == player || !other.isAlive() || other.isSpectator()) {
-                continue;
-            }
+        for (Entity other : mc.world.getOtherEntities(player, searchBox, TriggerBotModule::isValidTarget)) {
             Box box = other.getBoundingBox().expand(other.getTargetingMargin());
             double distSq;
             if (box.contains(eye)) {
@@ -177,7 +262,7 @@ public final class TriggerBotModule {
     }
 
     private static void attack(MinecraftClient mc, ClientPlayerEntity player,
-                               AbstractClientPlayerEntity target, boolean crit) {
+                               Entity target, boolean crit) {
         boolean wasSprinting = player.isSprinting();
 
         if (sprintReset && crit && wasSprinting) {
