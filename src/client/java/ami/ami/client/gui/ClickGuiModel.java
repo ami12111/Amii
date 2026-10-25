@@ -3,7 +3,6 @@ package ami.ami.client.gui;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -139,7 +138,7 @@ public final class ClickGuiModel {
             modules.put(entry, live(entry));
         }
         List<Category> categories = new ArrayList<>();
-        categories.add(new Category("All", UiRenderer.ICON_ALL, modules(null, modules)));
+        categories.add(new Category("Все", UiRenderer.ICON_ALL, modules(null, modules)));
         for (ModuleEntry.Category category : ModuleEntry.Category.values()) {
             categories.add(new Category(label(category), icon(category), modules(category, modules)));
         }
@@ -165,13 +164,16 @@ public final class ClickGuiModel {
                 controls.add(new Action(action));
             }
         }
-        controls.add(new Key("Keybind", "Click to bind, right-click to clear"));
+        controls.add(new Key("Клавиша", "ЛКМ — назначить, ПКМ — сбросить"));
         return new Module(entry, controls);
     }
 
     private static String label(ModuleEntry.Category category) {
-        String raw = category.name();
-        return raw.charAt(0) + raw.substring(1).toLowerCase(Locale.ROOT);
+        return switch (category) {
+            case COMBAT -> "Бой";
+            case MOVEMENT -> "Движение";
+            case RENDER -> "Рендер";
+        };
     }
 
     private static int icon(ModuleEntry.Category category) {
