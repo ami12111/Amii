@@ -14,13 +14,13 @@ import net.minecraft.entity.player.PlayerInventory;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
 import net.minecraft.network.packet.c2s.play.ClientCommandC2SPacket;
-import net.minecraft.network.packet.c2s.play.UpdateSelectedSlotC2SPacket;
 import net.minecraft.registry.tag.ItemTags;
 import net.minecraft.util.Hand;
 import net.minecraft.util.hit.HitResult;
 import net.minecraft.util.math.Box;
 import net.minecraft.util.math.Vec3d;
 
+import java.lang.ref.WeakReference;
 import java.util.Optional;
 
 /**
@@ -71,11 +71,20 @@ public final class TriggerBotModule {
     public static boolean noHitWhileBlocking = true;
 
     /**
-     * Ломать щит: если цель-игрок закрылась щитом (и щит смотрит на нас), на момент удара берём
-     * топор из хотбара, бьём им (топор отключает щит), и сразу возвращаем прежний слот.
+     * Ломать щит: если цель-игрок закрылась щитом (и щит смотрит на нас), берём топор из хотбара,
+     * бьём им (топор отключает щит) и через паузу возвращаем прежний слот.
      * Если топор уже в руке - просто бьём им. Нет топора в хотбаре - бьём как обычно.
+     *
+     * Переключение, удар и возврат слота разнесены по тикам: три пакета в одном тике
+     * (смена слота + атака + возврат) - неестественный паттерн, который палит античиты.
      */
     public static boolean breakShield = true;
+
+    /** Минимальная пауза в тиках между сменой слота на топор и ударом (1..3). */
+    public static int shieldBreakDelay = 1;
+
+    /** Сколько тиков держать топор в руке после удара, прежде чем вернуть слот (1..5). */
+    public static int shieldBreakHold = 2;
 
     /** Бить игроков, на которых надета хотя бы одна часть брони. */
     public static boolean targetPlayers = true;
@@ -104,6 +113,22 @@ public final class TriggerBotModule {
     /** Сколько тиков ещё действует окно отдачи. */
     private static int recoilTicks = 0;
 
+    /** Страховка: если удар по щиту так и не случился, вернуть слот через столько тиков. */
+    private static final int SHIELD_BREAK_TIMEOUT = 10;
+
+    /** Игрок, чей слот временно занят топором. Слабая ссылка, чтобы не держать мир. */
+    private static WeakReference<ClientPlayerEntity> shieldBreakOwner = new WeakReference<>(null);
+    /** Слот, выбранный до переключения на топор; -1 = переключения нет. */
+    private static int shieldBreakPreviousSlot = -1;
+    /** Слот с топором; -1 = переключения нет. */
+    private static int shieldBreakAxeSlot = -1;
+    /** Тиков осталось до удара или до возврата слота - зависит от shieldBreakHit. */
+    private static int shieldBreakTicks = 0;
+    /** Тиков осталось до принудительного возврата, пока удар ещё не нанесён. */
+    private static int shieldBreakTimeout = 0;
+    /** true = удар уже нанесён, идёт пауза перед возвратом слота. */
+    private static boolean shieldBreakHit = false;
+
     private TriggerBotModule() {
     }
 
@@ -123,15 +148,23 @@ public final class TriggerBotModule {
         if (recoilTicks > 0) {
             recoilTicks--;
         }
-        if (!enabled) {
-            return;
-        }
 
         ClientPlayerEntity player = mc.player;
         if (player == null || mc.world == null || mc.interactionManager == null) {
+            // Мир пропал (выход, смена измерения) - возвращать слот уже некуда.
+            clearShieldBreak();
+            return;
+        }
+
+        // Возврат слота тикает независимо от цели и включённости модуля.
+        tickShieldBreak(player);
+
+        if (!enabled) {
+            restoreShieldBreak(player);
             return;
         }
         if (mc.currentScreen != null) {
+            restoreShieldBreak(player);
             return;
         }
         if (!player.isAlive() || player.isSpectator()) {
@@ -165,7 +198,11 @@ public final class TriggerBotModule {
             if (charge < CRIT_CHARGE) {
                 return;
             }
+            if (!prepareShieldBreak(player, target)) {
+                return;
+            }
             attack(mc, player, target, true);
+            finishShieldBreak(player);
             return;
         }
 
@@ -179,7 +216,11 @@ public final class TriggerBotModule {
         if (charge < minCooldown) {
             return;
         }
+        if (!prepareShieldBreak(player, target)) {
+            return;
+        }
         attack(mc, player, target, false);
+        finishShieldBreak(player);
     }
 
     /** Игрок сейчас ест: держит активный предмет, у которого есть компонент еды. */
@@ -283,24 +324,11 @@ public final class TriggerBotModule {
             player.setSprinting(false);
         }
 
-        // Щит цели: временно берём топор. Переключение, удар и возврат слота происходят
-        // в одном тике, поэтому сервер ни разу не тикает с топором в руке.
-        PlayerInventory inventory = player.getInventory();
-        int previousSlot = inventory.getSelectedSlot();
-        int axeSlot = findShieldBreakSlot(player, target);
-        boolean swapped = axeSlot >= 0 && axeSlot != previousSlot;
-        if (swapped) {
-            inventory.setSelectedSlot(axeSlot);
-        }
-
-        // attackEntity() сам досылает пакет выбора слота (топор) перед пакетом атаки.
+        // Топор (если нужен для щита) уже выбран заранее, за пару тиков до удара.
+        // Пакет смены слота отправляет ванильный interactionManager на своём тике,
+        // поэтому здесь нет ни ручного пакета слота, ни трёх пакетов в одном тике.
         mc.interactionManager.attackEntity(player, target);
         player.swingHand(Hand.MAIN_HAND);
-
-        if (swapped) {
-            inventory.setSelectedSlot(previousSlot);
-            player.networkHandler.sendPacket(new UpdateSelectedSlotC2SPacket(previousSlot));
-        }
 
         if (sprintReset && wasSprinting) {
             restoreSprint(mc, player);
@@ -344,6 +372,116 @@ public final class TriggerBotModule {
             }
         }
         return best;
+    }
+
+    /**
+     * Решает, можно ли бить в этом тике. Если нужен топор, но он ещё не в руке,
+     * переключает слот и откладывает удар на shieldBreakDelay тиков.
+     *
+     * @return true - бьём сейчас; false - удар отложен (слот только что переключён).
+     */
+    private static boolean prepareShieldBreak(ClientPlayerEntity player, Entity target) {
+        if (shieldBreakHit) {
+            return true;
+        }
+
+        int axeSlot = findShieldBreakSlot(player, target);
+        if (axeSlot < 0) {
+            return true;
+        }
+
+        PlayerInventory inventory = player.getInventory();
+        int current = inventory.getSelectedSlot();
+        if (axeSlot == current) {
+            return true;
+        }
+
+        if (shieldBreakPreviousSlot < 0) {
+            // Топор не в руке: выбираем его и даём серверу увидеть смену слота
+            // хотя бы за один тик до атаки, а не в том же тике.
+            shieldBreakOwner = new WeakReference<>(player);
+            shieldBreakPreviousSlot = current;
+            shieldBreakAxeSlot = axeSlot;
+            shieldBreakTicks = Math.max(1, shieldBreakDelay);
+            shieldBreakTimeout = shieldBreakTicks + SHIELD_BREAK_TIMEOUT;
+            inventory.setSelectedSlot(axeSlot);
+            return false;
+        }
+
+        if (current != shieldBreakAxeSlot) {
+            // Игрок сам сменил слот: не навязываем свою последовательность.
+            clearShieldBreak();
+            return false;
+        }
+
+        if (shieldBreakTicks > 0) {
+            shieldBreakTicks--;
+            return false;
+        }
+        return true;
+    }
+
+    /** Запоминает, что удар нанесён, и запускает паузу перед возвратом слота. */
+    private static void finishShieldBreak(ClientPlayerEntity player) {
+        if (shieldBreakPreviousSlot < 0 || shieldBreakHit) {
+            return;
+        }
+        if (player.getInventory().getSelectedSlot() != shieldBreakAxeSlot) {
+            return;
+        }
+        shieldBreakHit = true;
+        shieldBreakTicks = Math.max(1, shieldBreakHold);
+        shieldBreakTimeout = 0;
+    }
+
+    /** Тикает возврат слота: страховочный таймаут до удара и пауза после него. */
+    private static void tickShieldBreak(ClientPlayerEntity player) {
+        if (shieldBreakPreviousSlot < 0) {
+            return;
+        }
+        if (shieldBreakOwner.get() != player) {
+            clearShieldBreak();
+            return;
+        }
+        if (player.getInventory().getSelectedSlot() != shieldBreakAxeSlot) {
+            // Игрок сам переключил слот - наша последовательность больше не актуальна.
+            clearShieldBreak();
+            return;
+        }
+
+        if (shieldBreakHit) {
+            shieldBreakTicks--;
+            if (shieldBreakTicks <= 0) {
+                restoreShieldBreak(player);
+            }
+            return;
+        }
+
+        shieldBreakTimeout--;
+        if (shieldBreakTimeout <= 0) {
+            restoreShieldBreak(player);
+        }
+    }
+
+    /** Возвращает слот, выбранный до топора. Пакет отправит ванильный interactionManager. */
+    private static void restoreShieldBreak(ClientPlayerEntity player) {
+        if (shieldBreakPreviousSlot < 0) {
+            return;
+        }
+        PlayerInventory inventory = player.getInventory();
+        if (inventory.getSelectedSlot() == shieldBreakAxeSlot) {
+            inventory.setSelectedSlot(shieldBreakPreviousSlot);
+        }
+        clearShieldBreak();
+    }
+
+    private static void clearShieldBreak() {
+        shieldBreakOwner = new WeakReference<>(null);
+        shieldBreakPreviousSlot = -1;
+        shieldBreakAxeSlot = -1;
+        shieldBreakTicks = 0;
+        shieldBreakTimeout = 0;
+        shieldBreakHit = false;
     }
 
     /** Цель подняла щит: так же, как isBlocking() у нас - плюс проверка активного предмета. */
