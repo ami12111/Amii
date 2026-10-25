@@ -1,8 +1,8 @@
 package ami.ami.client.gui;
 
 import ami.ami.client.bind.ModuleBinds;
+import ami.ami.client.config.ModuleSettings;
 import ami.ami.client.velocity.VelocityClient;
-import ami.ami.client.velocity.VelocityConfig;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -437,7 +437,7 @@ public final class LiteClickGuiScreen extends Screen {
 
     @Override
     public void removed() {
-        VelocityConfig.save();
+        ModuleSettings.save();
     }
 
     private record Layout(float x, float y, float w, float h, float s, float side,
