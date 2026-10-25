@@ -44,6 +44,6 @@ public abstract class HeldItemRendererMixin {
             return;
         }
         Arm arm = hand == Hand.MAIN_HAND ? player.getMainArm() : player.getMainArm().getOpposite();
-        ViewModelModule.apply(matrices, arm == Arm.RIGHT);
+        ViewModelModule.apply(matrices, arm == Arm.RIGHT, hand == Hand.OFF_HAND);
     }
 }
