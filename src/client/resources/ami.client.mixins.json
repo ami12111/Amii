@@ -9,7 +9,9 @@
     "LivingEntityMixin",
     "GameRendererMixin",
     "HeldItemRendererMixin",
-    "MinecraftClientMixin"
+    "InGameOverlayRendererMixin",
+    "MinecraftClientMixin",
+    "ParticleManagerMixin"
   ],
   "injectors": {
     "defaultRequire": 1

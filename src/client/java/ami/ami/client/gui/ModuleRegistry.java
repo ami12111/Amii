@@ -2,6 +2,7 @@ package ami.ami.client.gui;
 
 import ami.ami.client.movement.AutoSprintModule;
 import ami.ami.client.render.NoHurtCamModule;
+import ami.ami.client.render.NoRenderModule;
 import ami.ami.client.render.ViewModelModule;
 import ami.ami.client.triggerbot.TriggerBotModule;
 import ami.ami.client.velocity.VelocityConfig;
@@ -115,6 +116,23 @@ public final class ModuleRegistry {
                     () -> NoHurtCamModule.enabled,
                     value -> NoHurtCamModule.enabled = value,
                     List.of()),
+            new ModuleEntry(
+                    "norender", "No Render", "NR", ModuleEntry.Category.RENDER,
+                    "Hides selected visual effects: world particles, the fire overlay while you burn, "
+                            + "and the totem of undying pop animation.",
+                    () -> NoRenderModule.enabled,
+                    value -> NoRenderModule.enabled = value,
+                    List.of(
+                            new BoolSetting("Particles", "Hide world particles",
+                                    () -> NoRenderModule.particles,
+                                    value -> NoRenderModule.particles = value),
+                            new BoolSetting("Fire overlay", "Hide the fire overlay while you are burning",
+                                    () -> NoRenderModule.fireOverlay,
+                                    value -> NoRenderModule.fireOverlay = value),
+                            new BoolSetting("Totem pop", "Hide the totem of undying animation",
+                                    () -> NoRenderModule.totemAnimation,
+                                    value -> NoRenderModule.totemAnimation = value)
+                    )),
             new ModuleEntry(
                     "viewmodel", "ViewModel", "VM", ModuleEntry.Category.RENDER,
                     "Moves, resizes and tilts the item or hand you hold in first person. The second "
