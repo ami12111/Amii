@@ -1,0 +1,18 @@
+# Gradle
+.gradle/
+build/
+
+# IntelliJ IDEA
+.idea/!*runConfigurations.xml/
+.idea/modules.xml
+.idea/misc.xml
+.idea/vcs.xml
+.idea/workspace.xml
+*.iml
+
+# Fabric / Loom
+run/
+remappedSrc/
+
+## Windows
+Thumbs.db

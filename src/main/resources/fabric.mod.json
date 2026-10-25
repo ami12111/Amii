@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "id": "ami",
+  "version": "${version}",
+  "name": "Ami",
+  "description": "",
+  "authors": [],
+  "contact": {},
+  "license": "All-Rights-Reserved",
+  "icon": "assets/ami/icon.png",
+  "environment": "*",
+  "entrypoints": {
+    "fabric-datagen": [
+      "ami.ami.client.AmiDataGenerator"
+    ],
+    "client": [
+      "ami.ami.client.AmiClient",
+      "ami.ami.client.velocity.VelocityClient",
+      "ami.ami.client.triggerbot.TriggerBotClient"
+    ],
+    "main": [
+      "ami.ami.Ami"
+    ]
+  },
+  "mixins": [
+    "ami.mixins.json",
+    {
+      "config": "ami.client.mixins.json",
+      "environment": "client"
+    }
+  ],
+  "depends": {
+    "fabricloader": ">=${loader_version}",
+    "fabric-api": "*",
+    "minecraft": "${minecraft_version}"
+  }
+}
