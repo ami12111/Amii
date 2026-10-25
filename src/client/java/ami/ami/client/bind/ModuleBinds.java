@@ -74,7 +74,7 @@ public final class ModuleBinds {
 
     public static String label(int keyCode) {
         if (keyCode == NONE) {
-            return "None";
+            return "Нет";
         }
         String glfwName = GLFW.glfwGetKeyName(keyCode, 0);
         if (glfwName != null) {
@@ -105,7 +105,7 @@ public final class ModuleBinds {
             entry.toggle();
             if (mc.player != null) {
                 mc.player.sendMessage(Text.literal(entry.name() + ": "
-                        + (entry.isEnabled() ? "§aON" : "§cOFF")), true);
+                        + (entry.isEnabled() ? "§aВКЛ" : "§cВЫКЛ")), true);
             }
         }
         KEY_STATE.clear();

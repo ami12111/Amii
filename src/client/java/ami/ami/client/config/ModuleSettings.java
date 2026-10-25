@@ -1,7 +1,9 @@
 package ami.ami.client.config;
 
 import ami.ami.client.movement.AutoSprintModule;
+import ami.ami.client.render.JumpCircles;
 import ami.ami.client.render.NoHurtCamModule;
+import ami.ami.client.render.NoRenderModule;
 import ami.ami.client.render.ViewModelModule;
 import ami.ami.client.triggerbot.TriggerBotModule;
 import ami.ami.client.velocity.VelocityConfig;
@@ -36,7 +38,9 @@ public final class ModuleSettings {
             TriggerBotModule.class,
             ViewModelModule.class,
             NoHurtCamModule.class,
-            AutoSprintModule.class);
+            NoRenderModule.class,
+            AutoSprintModule.class,
+            JumpCircles.class);
 
     private ModuleSettings() {
     }

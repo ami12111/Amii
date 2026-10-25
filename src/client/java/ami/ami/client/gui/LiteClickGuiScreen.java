@@ -143,7 +143,7 @@ public final class LiteClickGuiScreen extends Screen {
                 .circle(l.x + 22 * l.s, fy + 2 * l.s, 8 * l.s, 0xFF1D1F27)
                 .icon(l.x + 22 * l.s, fy + 2 * l.s, 10 * l.s, WHITE, UiRenderer.ICON_PLAYER)
                 .strongText(l.x + 36 * l.s, fy - 2 * l.s, 7.8f * l.s, WHITE, "Ami")
-                .text(l.x + 36 * l.s, fy + 8 * l.s, 6.5f * l.s, MUTED, "Click GUI");
+                .text(l.x + 36 * l.s, fy + 8 * l.s, 6.5f * l.s, MUTED, "Клик-меню");
     }
 
     private void header(UiDrawList ui, Layout l, int mx, int my, boolean pressed) {
@@ -159,7 +159,7 @@ public final class LiteClickGuiScreen extends Screen {
                 .outlineRoundedRect(sx, y - 10 * l.s, sw, 20 * l.s, 5 * l.s,
                         Math.max(0.5f, l.s * 0.6f), searchFocused ? 0xFF3A3B40 : BORDER)
                 .icon(sx + sw - 10 * l.s, y, 9 * l.s, MUTED, UiRenderer.ICON_SEARCH);
-        String shown = search.isEmpty() ? "Search modules..." : search;
+        String shown = search.isEmpty() ? "Поиск модулей..." : search;
         if (searchFocused && (System.currentTimeMillis() / 500) % 2 == 0) {
             shown += "_";
         }
@@ -256,7 +256,7 @@ public final class LiteClickGuiScreen extends Screen {
         }
         if (visible.isEmpty()) {
             ui.centeredText(l.mainX + l.mainW / 2, l.y + l.h / 2, 9 * l.s, MUTED,
-                    "No modules found", false);
+                    "Модули не найдены", false);
         }
         ui.popScissor();
     }
@@ -312,7 +312,7 @@ public final class LiteClickGuiScreen extends Screen {
                 y += 24 * l.s;
             } else if (control instanceof ClickGuiModel.Key key) {
                 boolean listening = module.id.equals(bindingModule);
-                String label = listening ? "Press a key" : ModuleBinds.label(module.id);
+                String label = listening ? "Нажмите клавишу" : ModuleBinds.label(module.id);
                 ui.strongText(x, y + 7 * l.s, 7.2f * l.s, TEXT, key.name())
                         .text(x, y + 16 * l.s, 6 * l.s, MUTED, key.hint());
                 float kw = Math.min(74 * l.s, w * 0.44f);
