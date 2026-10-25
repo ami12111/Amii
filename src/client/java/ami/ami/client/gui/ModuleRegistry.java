@@ -1,7 +1,6 @@
 package ami.ami.client.gui;
 
 import ami.ami.client.render.NoHurtCamModule;
-import ami.ami.client.triggerbot.TriggerBotClient;
 import ami.ami.client.triggerbot.TriggerBotModule;
 import ami.ami.client.velocity.VelocityConfig;
 import ami.ami.client.velocity.VelocityStats;
@@ -12,12 +11,11 @@ import java.util.List;
 public final class ModuleRegistry {
     private static final List<ModuleEntry> MODULES = List.of(
             new ModuleEntry(
-                    "triggerbot", "TRIGGERBOT", "TB", ModuleEntry.Category.COMBAT,
+                    "triggerbot", "Triggerbot", "TB", ModuleEntry.Category.COMBAT,
                     "Swings automatically at the player under your crosshair. Respects the vanilla attack "
                             + "cooldown and can hold the swing for a falling critical hit.",
                     () -> TriggerBotModule.enabled,
                     value -> TriggerBotModule.enabled = value,
-                    ModuleRegistry::triggerBotKey,
                     List.of(
                             new BoolSetting("Only crits", "Never swing unless falling",
                                     () -> TriggerBotModule.onlyCrits,
@@ -32,12 +30,11 @@ public final class ModuleRegistry {
                                     value -> TriggerBotModule.reach = value)
                     )),
             new ModuleEntry(
-                    "velocity", "VELOCITY", "VL", ModuleEntry.Category.MOVEMENT,
+                    "velocity", "Velocity", "VL", ModuleEntry.Category.MOVEMENT,
                     "Jump-resets on knockback. Schedules a jump after taking a hit so the next knockback "
                             + "is reduced, limited by chance, delay and cooldown.",
                     () -> VelocityConfig.get().enabled,
                     value -> VelocityConfig.get().enabled = value,
-                    null,
                     List.of(
                             new BoolSetting("Ground only", "Jump only from solid ground",
                                     () -> VelocityConfig.get().onlyOnGround,
@@ -54,16 +51,15 @@ public final class ModuleRegistry {
                                     10, 40, 1, 0, "t",
                                     () -> VelocityConfig.get().cooldownTicks,
                                     value -> VelocityConfig.get().cooldownTicks = (int) Math.round(value)),
-                            new ActionSetting("Telemetry", "Clear jump statistics", "RESET TELEMETRY",
+                            new ActionSetting("Telemetry", "Clear jump statistics", "Reset telemetry",
                                     VelocityStats::reset)
                     )),
             new ModuleEntry(
-                    "nohurtcam", "NO HURT CAM", "NH", ModuleEntry.Category.RENDER,
+                    "nohurtcam", "No Hurt Cam", "NH", ModuleEntry.Category.RENDER,
                     "Suppresses the camera tilt applied when you take damage, keeping your view steady "
                             + "while fighting.",
                     () -> NoHurtCamModule.enabled,
                     value -> NoHurtCamModule.enabled = value,
-                    null,
                     List.of())
     );
 
@@ -106,11 +102,5 @@ public final class ModuleRegistry {
 
     public static int count(ModuleEntry.Category category) {
         return filtered(category).size();
-    }
-
-    private static String triggerBotKey() {
-        return TriggerBotClient.toggleKey == null
-                ? "R"
-                : TriggerBotClient.toggleKey.getBoundKeyLocalizedText().getString();
     }
 }

@@ -15,8 +15,7 @@
     ],
     "client": [
       "ami.ami.client.AmiClient",
-      "ami.ami.client.velocity.VelocityClient",
-      "ami.ami.client.triggerbot.TriggerBotClient"
+      "ami.ami.client.velocity.VelocityClient"
     ],
     "main": [
       "ami.ami.Ami"

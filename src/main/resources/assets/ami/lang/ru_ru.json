@@ -1,6 +1,4 @@
 {
   "key.category.ami.main": "Ami",
-  "key.ami.open_clickgui": "Открыть ClickGUI",
-  "key.category.ami.triggerbot": "Ami / TriggerBot",
-  "key.ami.triggerbot_toggle": "Вкл/выкл TriggerBot"
+  "key.ami.open_clickgui": "Открыть ClickGUI"
 }

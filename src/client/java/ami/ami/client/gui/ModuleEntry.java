@@ -3,7 +3,6 @@ package ami.ami.client.gui;
 import java.util.List;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
-import java.util.function.Supplier;
 
 /** Describes one module for the click GUI. State is read and written through lambdas. */
 public final class ModuleEntry {
@@ -24,12 +23,10 @@ public final class ModuleEntry {
     private final String description;
     private final BooleanSupplier enabled;
     private final Consumer<Boolean> setEnabled;
-    private final Supplier<String> keybind;
     private final List<Setting> settings;
 
     public ModuleEntry(String id, String name, String glyph, Category category, String description,
-                       BooleanSupplier enabled, Consumer<Boolean> setEnabled,
-                       Supplier<String> keybind, List<Setting> settings) {
+                       BooleanSupplier enabled, Consumer<Boolean> setEnabled, List<Setting> settings) {
         this.id = id;
         this.name = name;
         this.glyph = glyph;
@@ -37,7 +34,6 @@ public final class ModuleEntry {
         this.description = description;
         this.enabled = enabled;
         this.setEnabled = setEnabled;
-        this.keybind = keybind;
         this.settings = List.copyOf(settings);
     }
 
@@ -71,11 +67,6 @@ public final class ModuleEntry {
 
     public void toggle() {
         setEnabled(!isEnabled());
-    }
-
-    /** Localised key label, or null when the module has no bind. */
-    public String keybind() {
-        return keybind == null ? null : keybind.get();
     }
 
     public List<Setting> settings() {

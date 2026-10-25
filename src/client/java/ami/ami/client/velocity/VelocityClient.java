@@ -1,6 +1,6 @@
 package ami.ami.client.velocity;
 
-import ami.ami.client.gui.AmiClickGui;
+import ami.ami.client.gui.LiteClickGuiScreen;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
@@ -28,7 +28,7 @@ public class VelocityClient implements ClientModInitializer {
         ClientTickEvents.END_CLIENT_TICK.register(mc -> {
             while (openMenu.wasPressed()) {
                 if (mc.currentScreen == null) {
-                    mc.setScreen(new AmiClickGui());
+                    mc.setScreen(new LiteClickGuiScreen());
                 }
             }
         });
