@@ -49,6 +49,15 @@ public final class UiDrawList {
         return this;
     }
 
+    /** Мягкая SDF-тень под фигурой. */
+    public UiDrawList shadow(float x, float y, float width, float height, float radius, float blur,
+                             int color) {
+        checkMutable();
+        commands.add(new UiCommand.Shadow(x, y, positive(width), positive(height),
+                clampRadius(radius, width, height), positive(blur), color));
+        return this;
+    }
+
     public UiDrawList text(float x, float y, float size, int color, String value) {
         return text(x, y, size, color, value, UiCommand.HorizontalAlign.LEFT, false);
     }

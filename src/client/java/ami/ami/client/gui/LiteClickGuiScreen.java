@@ -12,6 +12,7 @@ import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.input.CharInput;
 import net.minecraft.client.input.KeyInput;
 import net.minecraft.text.Text;
+import org.joml.Matrix3x2fStack;
 import org.lwjgl.glfw.GLFW;
 
 /**
@@ -59,23 +60,37 @@ public final class LiteClickGuiScreen extends Screen {
         float dt = Math.min(0.05f, (now - lastFrame) / 1_000_000_000f);
         lastFrame = now;
 
-        long handle = MinecraftClient.getInstance().getWindow().getHandle();
+        MinecraftClient mc = MinecraftClient.getInstance();
+        long handle = mc.getWindow().getHandle();
         boolean down = GLFW.glfwGetMouseButton(handle, GLFW.GLFW_MOUSE_BUTTON_LEFT) == GLFW.GLFW_PRESS;
         boolean pressed = down && !previousDown;
         boolean rightDown = GLFW.glfwGetMouseButton(handle, GLFW.GLFW_MOUSE_BUTTON_RIGHT) == GLFW.GLFW_PRESS;
         boolean rightPressed = rightDown && !previousRightDown;
 
-        Layout layout = Layout.create(width, height);
+        // Рисуем в реальных пикселях фреймбуфера: обратная шкала матрицей отменяет
+        // GUI-масштаб, поэтому текст и скругления не размываются при апскейле.
+        int fbWidth = mc.getWindow().getFramebufferWidth();
+        int fbHeight = mc.getWindow().getFramebufferHeight();
+        float guiScale = (float) mc.getWindow().getScaleFactor();
+        int mx = Math.round((float) (mouseX * (double) fbWidth / Math.max(1, width)));
+        int my = Math.round((float) (mouseY * (double) fbHeight / Math.max(1, height)));
+
+        Layout layout = Layout.create(width, height, fbWidth, fbHeight, guiScale);
         UiDrawList ui = new UiDrawList();
-        backdrop(ui, layout);
-        sidebar(ui, layout, mouseX, mouseY, pressed, dt);
+        Matrix3x2fStack matrices = g.getMatrices();
+        matrices.pushMatrix();
+        matrices.scale(1f / guiScale, 1f / guiScale);
+
+        backdrop(ui, layout, fbWidth, fbHeight, guiScale);
+        sidebar(ui, layout, mx, my, pressed, dt);
         ClickGuiModel.Category category = categories.get(categoryIndex);
-        header(ui, layout, mouseX, mouseY, pressed);
-        moduleGrid(ui, layout, category, mouseX, mouseY, down, pressed, rightPressed, dt);
+        header(ui, layout, mx, my, pressed);
+        moduleGrid(ui, layout, category, mx, my, down, pressed, rightPressed, dt);
         if (bindingModule != null && (expanded == null || !expanded.id.equals(bindingModule))) {
             bindingModule = null;
         }
         UiRenderer.submit(g, ui, textRenderer);
+        matrices.popMatrix();
 
         if (!down) {
             dragging = null;
@@ -84,23 +99,20 @@ public final class LiteClickGuiScreen extends Screen {
         previousRightDown = rightDown;
     }
 
-    private void backdrop(UiDrawList ui, Layout l) {
-        ui.rect(0, 0, width, height, 0xC9000000);
+    private void backdrop(UiDrawList ui, Layout l, int fbWidth, int fbHeight, float guiScale) {
+        ui.rect(0, 0, fbWidth, fbHeight, 0xC9000000);
         for (int i = 0; i < 90; i++) {
-            float px = (i * 83 % Math.max(1, width));
-            float py = (i * 47 % Math.max(1, height));
-            ui.circle(px, py, 0.45f, 0x16FFFFFF);
+            float px = i * 83 % Math.max(1, fbWidth);
+            float py = i * 47 % Math.max(1, fbHeight);
+            ui.circle(px, py, 0.45f * guiScale, 0x16FFFFFF);
         }
-        for (int i = 5; i > 0; i--) {
-            float p = i * 3.5f * l.s;
-            ui.roundedRect(l.x - p, l.y - p + 4 * l.s, l.w + p * 2, l.h + p * 2,
-                    14 * l.s, 0x08000000);
-        }
+        ui.shadow(l.x - 3 * l.s, l.y + 2 * l.s, l.w + 6 * l.s, l.h + 6 * l.s,
+                11 * l.s, 24 * l.s, 0x50000000);
         ui.roundedRect(l.x, l.y, l.w, l.h, 8 * l.s, PANEL)
-                .outlineRoundedRect(l.x, l.y, l.w, l.h, 8 * l.s, Math.max(0.55f, l.s * 0.7f),
-                        0xFF202126)
                 .roundedRect(l.x, l.y, l.side, l.h, 8 * l.s, SIDE)
-                .rect(l.x + l.side - l.s, l.y + 10 * l.s, l.s, l.h - 20 * l.s, BORDER);
+                .rect(l.x + l.side - l.s, l.y + 10 * l.s, l.s, l.h - 20 * l.s, BORDER)
+                .outlineRoundedRect(l.x, l.y, l.w, l.h, 8 * l.s,
+                        Math.max(0.55f * guiScale, l.s * 0.7f), 0xFF202126);
     }
 
     private void sidebar(UiDrawList ui, Layout l, int mx, int my, boolean pressed, float dt) {
@@ -247,18 +259,20 @@ public final class LiteClickGuiScreen extends Screen {
         }
         maxScroll = Math.max(0, contentBottom + scrollOffset - viewportBottom);
         scrollTarget = Math.max(0, Math.min(maxScroll, scrollTarget));
+        ui.popScissor();
+
+        // Полоса прокрутки живёт в правом отступе и не перекрывает карточки.
         if (maxScroll > 1) {
             float trackH = viewportBottom - viewportTop;
             float thumbH = Math.max(18 * l.s, trackH * trackH / (trackH + maxScroll));
             float thumbY = viewportTop + (trackH - thumbH) * (scrollOffset / maxScroll);
-            ui.roundedRect(l.mainX + l.mainW - 1.5f * l.s, thumbY, 1.5f * l.s, thumbH,
-                    0.75f * l.s, 0x6673757B);
+            ui.roundedRect(l.mainX + l.mainW + 5 * l.s, thumbY, 2 * l.s, thumbH,
+                    l.s, 0x6673757B);
         }
         if (visible.isEmpty()) {
             ui.centeredText(l.mainX + l.mainW / 2, l.y + l.h / 2, 9 * l.s, MUTED,
                     "Модули не найдены", false);
         }
-        ui.popScissor();
     }
 
     private void drawSettings(UiDrawList ui, Layout l, ClickGuiModel.Module module, float x, float y,
@@ -422,8 +436,14 @@ public final class LiteClickGuiScreen extends Screen {
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double horizontalAmount,
                                  double verticalAmount) {
-        Layout l = Layout.create(width, height);
-        if (hit((float) mouseX, (float) mouseY, l.mainX, l.y + 44 * l.s, l.mainW, l.h - 54 * l.s)) {
+        MinecraftClient mc = MinecraftClient.getInstance();
+        int fbWidth = mc.getWindow().getFramebufferWidth();
+        int fbHeight = mc.getWindow().getFramebufferHeight();
+        float guiScale = (float) mc.getWindow().getScaleFactor();
+        float mx = (float) (mouseX * (double) fbWidth / Math.max(1, width));
+        float my = (float) (mouseY * (double) fbHeight / Math.max(1, height));
+        Layout l = Layout.create(width, height, fbWidth, fbHeight, guiScale);
+        if (hit(mx, my, l.mainX, l.y + 44 * l.s, l.mainW, l.h - 54 * l.s)) {
             scrollTarget = Math.max(0, Math.min(maxScroll, scrollTarget - (float) verticalAmount * 36 * l.s));
             return true;
         }
@@ -442,16 +462,17 @@ public final class LiteClickGuiScreen extends Screen {
 
     private record Layout(float x, float y, float w, float h, float s, float side,
                           float mainX, float mainW) {
-        static Layout create(int sw, int sh) {
+        static Layout create(int guiW, int guiH, int fbW, int fbH, float guiScale) {
             float designW = 600;
             float designH = 340;
             float margin = 18;
-            float fitScale = Math.min((sw - margin * 2) / designW, (sh - margin * 2) / designH);
-            float s = Math.max(0.55f, Math.min(0.78f, fitScale));
+            float fitScale = Math.min((guiW - margin * 2) / designW, (guiH - margin * 2) / designH);
+            float logical = Math.max(0.55f, Math.min(0.78f, fitScale));
+            float s = logical * guiScale;
             float w = designW * s;
             float h = designH * s;
-            float x = (sw - w) / 2;
-            float y = (sh - h) / 2;
+            float x = (fbW - w) / 2f;
+            float y = (fbH - h) / 2f;
             float side = 130 * s;
             float mainX = x + side + 14 * s;
             return new Layout(x, y, w, h, s, side, mainX, x + w - mainX - 14 * s);

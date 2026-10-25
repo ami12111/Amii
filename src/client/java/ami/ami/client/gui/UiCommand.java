@@ -2,7 +2,7 @@ package ami.ami.client.gui;
 
 /** One primitive in a {@link UiDrawList}. */
 public sealed interface UiCommand permits UiCommand.Rect, UiCommand.GradientRect, UiCommand.Outline,
-        UiCommand.Circle, UiCommand.Line, UiCommand.PushScissor, UiCommand.PopScissor,
+        UiCommand.Circle, UiCommand.Line, UiCommand.Shadow, UiCommand.PushScissor, UiCommand.PopScissor,
         UiCommand.Text, UiCommand.BrandText, UiCommand.Icon {
 
     enum HorizontalAlign {
@@ -26,6 +26,11 @@ public sealed interface UiCommand permits UiCommand.Rect, UiCommand.GradientRect
     }
 
     record Line(float x1, float y1, float x2, float y2, float thickness, int color) implements UiCommand {
+    }
+
+    /** Мягкая тень: фигура с размытием, рисуется SDF-пайплайном. */
+    record Shadow(float x, float y, float width, float height, float radius, float blur,
+                  int color) implements UiCommand {
     }
 
     record PushScissor(float x, float y, float width, float height) implements UiCommand {
