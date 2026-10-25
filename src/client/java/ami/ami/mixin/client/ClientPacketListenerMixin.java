@@ -1,5 +1,6 @@
 package ami.ami.mixin.client;
 
+import ami.ami.client.triggerbot.TriggerBotModule;
 import ami.ami.client.velocity.VelocityModule;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.network.ClientPlayNetworkHandler;
@@ -28,5 +29,6 @@ public abstract class ClientPacketListenerMixin {
         }
 
         VelocityModule.onKnockback(player);
+        TriggerBotModule.onKnockback(player);
     }
 }

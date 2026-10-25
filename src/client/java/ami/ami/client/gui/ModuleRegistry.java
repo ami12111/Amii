@@ -13,19 +13,26 @@ public final class ModuleRegistry {
             new ModuleEntry(
                     "triggerbot", "Triggerbot", "TB", ModuleEntry.Category.COMBAT,
                     "Swings automatically at the player under your crosshair. Respects the vanilla attack "
-                            + "cooldown and can hold the swing for a falling critical hit.",
+                            + "cooldown and can hold the swing for a falling critical hit, including the "
+                            + "fall after knockback.",
                     () -> TriggerBotModule.enabled,
                     value -> TriggerBotModule.enabled = value,
                     List.of(
                             new BoolSetting("Only crits", "Never swing unless falling",
                                     () -> TriggerBotModule.onlyCrits,
                                     value -> TriggerBotModule.onlyCrits = value),
+                            new BoolSetting("Sprint reset", "Drop sprint before a crit, restore it after the swing",
+                                    () -> TriggerBotModule.sprintReset,
+                                    value -> TriggerBotModule.sprintReset = value),
+                            new BoolSetting("Recoil crits", "Hold the swing while knockback launches you, crit on the fall",
+                                    () -> TriggerBotModule.recoilCrits,
+                                    value -> TriggerBotModule.recoilCrits = value),
                             new NumberSetting("Attack charge", "Minimum vanilla cooldown before a swing",
                                     50, 100, 1, 0, "%",
                                     () -> TriggerBotModule.minCooldown * 100.0,
                                     value -> TriggerBotModule.minCooldown = (float) (value / 100.0)),
-                            new NumberSetting("Reach", "Maximum attack distance",
-                                    2.5, 6.0, 0.1, 1, "m",
+                            new NumberSetting("Reach", "Maximum distance from eyes to the target hitbox",
+                                    2.5, 4.0, 0.1, 1, "m",
                                     () -> TriggerBotModule.reach,
                                     value -> TriggerBotModule.reach = value)
                     )),
