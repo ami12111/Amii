@@ -15,8 +15,9 @@ public final class ModuleRegistry {
             new ModuleEntry(
                     "triggerbot", "Triggerbot", "TB", ModuleEntry.Category.COMBAT,
                     "Swings automatically at the target under your crosshair. Choose which targets are "
-                            + "allowed, pause while eating or blocking, respect the vanilla attack cooldown "
-                            + "and hold the swing for a falling critical hit, including the fall after knockback.",
+                            + "allowed, pause while eating or blocking, break shields with an axe on the fly, "
+                            + "respect the vanilla attack cooldown and hold the swing for a falling critical hit, "
+                            + "including the fall after knockback.",
                     () -> TriggerBotModule.enabled,
                     value -> TriggerBotModule.enabled = value,
                     List.of(
@@ -26,6 +27,9 @@ public final class ModuleRegistry {
                             new BoolSetting("Don't hit while blocking", "Pause swings while you are blocking with a shield",
                                     () -> TriggerBotModule.noHitWhileBlocking,
                                     value -> TriggerBotModule.noHitWhileBlocking = value),
+                            new BoolSetting("Break shield", "If the target blocks with a shield, swap to an axe from the hotbar, hit, then swap back",
+                                    () -> TriggerBotModule.breakShield,
+                                    value -> TriggerBotModule.breakShield = value),
                             new BoolSetting("Target players", "Players wearing at least one piece of armor",
                                     () -> TriggerBotModule.targetPlayers,
                                     value -> TriggerBotModule.targetPlayers = value),
