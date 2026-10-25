@@ -1,5 +1,6 @@
 package ami.ami.client.gui;
 
+import ami.ami.client.movement.AutoSprintModule;
 import ami.ami.client.render.NoHurtCamModule;
 import ami.ami.client.render.ViewModelModule;
 import ami.ami.client.triggerbot.TriggerBotModule;
@@ -82,6 +83,18 @@ public final class ModuleRegistry {
                                     value -> VelocityConfig.get().cooldownTicks = (int) Math.round(value)),
                             new ActionSetting("Telemetry", "Clear jump statistics", "Reset telemetry",
                                     VelocityStats::reset)
+                    )),
+            new ModuleEntry(
+                    "autosprint", "Auto Sprint", "AS", ModuleEntry.Category.MOVEMENT,
+                    "Keeps you sprinting while you move forward, without holding the sprint key. "
+                            + "Vanilla limits still apply: sneaking, blocking, eating or a low hunger bar "
+                            + "stop the sprint.",
+                    () -> AutoSprintModule.enabled,
+                    value -> AutoSprintModule.enabled = value,
+                    List.of(
+                            new BoolSetting("Ground only", "Start sprinting only from solid ground",
+                                    () -> AutoSprintModule.onlyOnGround,
+                                    value -> AutoSprintModule.onlyOnGround = value)
                     )),
             new ModuleEntry(
                     "nohurtcam", "No Hurt Cam", "NH", ModuleEntry.Category.RENDER,
