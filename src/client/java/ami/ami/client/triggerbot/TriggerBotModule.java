@@ -10,9 +10,12 @@ import net.minecraft.entity.effect.StatusEffects;
 import net.minecraft.entity.mob.Monster;
 import net.minecraft.entity.passive.AnimalEntity;
 import net.minecraft.entity.player.PlayerEntity;
+import net.minecraft.entity.player.PlayerInventory;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
 import net.minecraft.network.packet.c2s.play.ClientCommandC2SPacket;
+import net.minecraft.network.packet.c2s.play.UpdateSelectedSlotC2SPacket;
+import net.minecraft.registry.tag.ItemTags;
 import net.minecraft.util.Hand;
 import net.minecraft.util.hit.HitResult;
 import net.minecraft.util.math.Box;
@@ -66,6 +69,13 @@ public final class TriggerBotModule {
 
     /** Не бить, пока игрок закрывается щитом (в том числе в первые тики подъёма щита). */
     public static boolean noHitWhileBlocking = true;
+
+    /**
+     * Ломать щит: если цель-игрок закрылась щитом (и щит смотрит на нас), на момент удара берём
+     * топор из хотбара, бьём им (топор отключает щит), и сразу возвращаем прежний слот.
+     * Если топор уже в руке - просто бьём им. Нет топора в хотбаре - бьём как обычно.
+     */
+    public static boolean breakShield = true;
 
     /** Бить игроков, на которых надета хотя бы одна часть брони. */
     public static boolean targetPlayers = true;
@@ -273,12 +283,86 @@ public final class TriggerBotModule {
             player.setSprinting(false);
         }
 
+        // Щит цели: временно берём топор. Переключение, удар и возврат слота происходят
+        // в одном тике, поэтому сервер ни разу не тикает с топором в руке.
+        PlayerInventory inventory = player.getInventory();
+        int previousSlot = inventory.getSelectedSlot();
+        int axeSlot = findShieldBreakSlot(player, target);
+        boolean swapped = axeSlot >= 0 && axeSlot != previousSlot;
+        if (swapped) {
+            inventory.setSelectedSlot(axeSlot);
+        }
+
+        // attackEntity() сам досылает пакет выбора слота (топор) перед пакетом атаки.
         mc.interactionManager.attackEntity(player, target);
         player.swingHand(Hand.MAIN_HAND);
+
+        if (swapped) {
+            inventory.setSelectedSlot(previousSlot);
+            player.networkHandler.sendPacket(new UpdateSelectedSlotC2SPacket(previousSlot));
+        }
 
         if (sprintReset && wasSprinting) {
             restoreSprint(mc, player);
         }
+    }
+
+    /**
+     * Слот топора для удара по щиту или -1, если ломать щит не нужно/нечем.
+     * Если топор уже в руке, возвращает текущий слот (переключение не потребуется).
+     */
+    private static int findShieldBreakSlot(ClientPlayerEntity player, Entity target) {
+        if (!breakShield || !(target instanceof PlayerEntity victim)) {
+            return -1;
+        }
+        if (!isShielding(victim) || !shieldFacesUs(victim, player)) {
+            return -1;
+        }
+
+        PlayerInventory inventory = player.getInventory();
+        int current = inventory.getSelectedSlot();
+        if (inventory.getStack(current).isIn(ItemTags.AXES)) {
+            return current;
+        }
+        // Смена слота оборвёт использование предмета (лук, зелье и т.п.).
+        if (player.isUsingItem()) {
+            return -1;
+        }
+
+        // Любой топор отключает щит одинаково; из нескольких берём самый прочный (старший материал).
+        int best = -1;
+        int bestDurability = -1;
+        for (int slot = 0; slot < PlayerInventory.getHotbarSize(); slot++) {
+            ItemStack stack = inventory.getStack(slot);
+            if (stack.isEmpty() || !stack.isIn(ItemTags.AXES)) {
+                continue;
+            }
+            int durability = stack.getMaxDamage();
+            if (durability > bestDurability) {
+                bestDurability = durability;
+                best = slot;
+            }
+        }
+        return best;
+    }
+
+    /** Цель подняла щит: так же, как isBlocking() у нас - плюс проверка активного предмета. */
+    private static boolean isShielding(PlayerEntity other) {
+        if (other.isBlocking()) {
+            return true;
+        }
+        return other.isUsingItem() && other.getActiveItem().isOf(Items.SHIELD);
+    }
+
+    /**
+     * Щит закрывает только переднюю полусферу владельца (ванильная проверка в LivingEntity.damage):
+     * если цель смотрит от нас, удар и так пройдёт мимо щита, топор не нужен.
+     */
+    private static boolean shieldFacesUs(PlayerEntity victim, ClientPlayerEntity player) {
+        double dx = player.getX() - victim.getX();
+        double dz = player.getZ() - victim.getZ();
+        Vec3d look = victim.getRotationVec(1.0f);
+        return dx * look.x + dz * look.z > 0.0;
     }
 
     /** Возвращает спринт после удара, если игрок продолжает бежать вперёд. */
