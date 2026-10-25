@@ -6,6 +6,7 @@ import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.text.Text;
+import org.joml.Matrix3x2fStack;
 import org.lwjgl.glfw.GLFW;
 
 /**
@@ -88,20 +89,33 @@ public final class ColorSettingsScreen extends Screen {
         float dt = Math.min(0.05f, (now - lastFrame) / 1_000_000_000f);
         lastFrame = now;
 
-        long handle = MinecraftClient.getInstance().getWindow().getHandle();
+        MinecraftClient mc = MinecraftClient.getInstance();
+        long handle = mc.getWindow().getHandle();
         boolean down = GLFW.glfwGetMouseButton(handle, GLFW.GLFW_MOUSE_BUTTON_LEFT) == GLFW.GLFW_PRESS;
         boolean pressed = down && !previousDown;
 
-        Layout l = Layout.create(width, height);
+        // Как и в ClickGUI: рисуем в пикселях фреймбуфера и отменяем GUI-масштаб матрицей.
+        int fbWidth = mc.getWindow().getFramebufferWidth();
+        int fbHeight = mc.getWindow().getFramebufferHeight();
+        float guiScale = (float) mc.getWindow().getScaleFactor();
+        int mx = Math.round((float) (mouseX * (double) fbWidth / Math.max(1, width)));
+        int my = Math.round((float) (mouseY * (double) fbHeight / Math.max(1, height)));
+
+        Layout l = Layout.create(width, height, fbWidth, fbHeight, guiScale);
         UiDrawList ui = new UiDrawList();
-        backdrop(ui, l);
-        header(ui, l, mouseX, mouseY, pressed);
-        cards(ui, l, mouseX, mouseY, pressed);
-        picker(ui, l, mouseX, mouseY, down, pressed, now);
-        presets(ui, l, mouseX, mouseY, pressed);
+        Matrix3x2fStack matrices = g.getMatrices();
+        matrices.pushMatrix();
+        matrices.scale(1f / guiScale, 1f / guiScale);
+
+        backdrop(ui, l, fbWidth, fbHeight, guiScale);
+        header(ui, l, mx, my, pressed);
+        cards(ui, l, mx, my, pressed);
+        picker(ui, l, mx, my, down, pressed, now);
+        presets(ui, l, mx, my, pressed);
         footer(ui, l);
 
         UiRenderer.submit(g, ui, textRenderer);
+        matrices.popMatrix();
 
         if (!down) {
             draggingSv = false;
@@ -110,21 +124,18 @@ public final class ColorSettingsScreen extends Screen {
         previousDown = down;
     }
 
-    private void backdrop(UiDrawList ui, Layout l) {
-        ui.rect(0, 0, width, height, 0xC9000000);
+    private void backdrop(UiDrawList ui, Layout l, int fbWidth, int fbHeight, float guiScale) {
+        ui.rect(0, 0, fbWidth, fbHeight, 0xC9000000);
         for (int i = 0; i < 90; i++) {
-            float px = i * 97 % Math.max(1, width);
-            float py = i * 53 % Math.max(1, height);
-            ui.circle(px, py, 0.45f, 0x16FFFFFF);
+            float px = i * 97 % Math.max(1, fbWidth);
+            float py = i * 53 % Math.max(1, fbHeight);
+            ui.circle(px, py, 0.45f * guiScale, 0x16FFFFFF);
         }
-        for (int i = 5; i > 0; i--) {
-            float p = i * 3.5f * l.s;
-            ui.roundedRect(l.x - p, l.y - p + 4 * l.s, l.w + p * 2, l.h + p * 2,
-                    14 * l.s, 0x08000000);
-        }
+        ui.shadow(l.x - 3 * l.s, l.y + 2 * l.s, l.w + 6 * l.s, l.h + 6 * l.s,
+                11 * l.s, 24 * l.s, 0x50000000);
         ui.roundedRect(l.x, l.y, l.w, l.h, 10 * l.s, PANEL)
                 .outlineRoundedRect(l.x, l.y, l.w, l.h, 10 * l.s,
-                        Math.max(0.6f, l.s * 0.8f), BORDER);
+                        Math.max(0.6f * guiScale, l.s * 0.8f), BORDER);
     }
 
     private void header(UiDrawList ui, Layout l, int mx, int my, boolean pressed) {
@@ -170,7 +181,8 @@ public final class ColorSettingsScreen extends Screen {
             int color = sel ? currentColor() : colorOf(i);
             ui.circle(cx + 17 * l.s, cardY + cardH / 2f, 9 * l.s, 0xFF000000 | color)
                     .outlineRoundedRect(cx + 17 * l.s - 9 * l.s, cardY + cardH / 2f - 9 * l.s,
-                            18 * l.s, 18 * l.s, 9 * l.s, 1, 0xFF2A2D36);
+                            18 * l.s, 18 * l.s, 9 * l.s,
+                            Math.max(1f, 1.4f * l.s), 0xFF2A2D36);
             ui.strongText(cx + 32 * l.s, cardY + 13 * l.s, 7 * l.s, TEXT, EFFECT_NAMES[i]);
             ui.text(cx + 32 * l.s, cardY + 24 * l.s, 5.8f * l.s, MUTED,
                     String.format("#%06X", color));
@@ -280,7 +292,7 @@ public final class ColorSettingsScreen extends Screen {
 
     private void preview(UiDrawList ui, float x, float y, float w, float h, long now, float s) {
         ui.roundedRect(x, y, w, h, 6 * s, 0xFF07080B)
-                .outlineRoundedRect(x, y, w, h, 6 * s, 1, 0xFF191B22);
+                .outlineRoundedRect(x, y, w, h, 6 * s, Math.max(1f, 1.4f * s), 0xFF191B22);
 
         int rgb = currentColor();
         float cx = x + w / 2f;
@@ -469,15 +481,16 @@ public final class ColorSettingsScreen extends Screen {
     }
 
     private record Layout(float x, float y, float w, float h, float s) {
-        static Layout create(int sw, int sh) {
+        static Layout create(int guiW, int guiH, int fbW, int fbH, float guiScale) {
             float designW = 560f;
             float designH = 340f;
             float margin = 18f;
-            float fit = Math.min((sw - margin * 2) / designW, (sh - margin * 2) / designH);
-            float s = Math.max(0.55f, Math.min(0.9f, fit));
+            float fit = Math.min((guiW - margin * 2) / designW, (guiH - margin * 2) / designH);
+            float logical = Math.max(0.55f, Math.min(0.9f, fit));
+            float s = logical * guiScale;
             float w = designW * s;
             float h = designH * s;
-            return new Layout((sw - w) / 2f, (sh - h) / 2f, w, h, s);
+            return new Layout((fbW - w) / 2f, (fbH - h) / 2f, w, h, s);
         }
     }
 }

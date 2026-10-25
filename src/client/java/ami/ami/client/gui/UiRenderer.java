@@ -1,16 +1,22 @@
 package ami.ami.client.gui;
 
+import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.font.TextRenderer;
 import net.minecraft.client.gui.DrawContext;
+import net.minecraft.client.gui.ScreenRect;
 import net.minecraft.text.Style;
 import net.minecraft.text.StyleSpriteSource;
 import net.minecraft.text.Text;
 import net.minecraft.util.Identifier;
 import org.joml.Matrix3x2fStack;
+import org.jspecify.annotations.Nullable;
+
+import java.util.ArrayDeque;
+import java.util.Deque;
 
 /**
- * Draws a {@link UiDrawList} with plain {@link DrawContext} quads. Rounded rectangles and circles are
- * rasterised row by row, so the GUI needs no NanoVG-style backend. Icons are simple geometric shapes.
+ * Draws a {@link UiDrawList}. Скругления, круги, обводки и тени идут через один SDF-пайплайн
+ * ({@link SdfRenderer}), иконки — простые геометрические фигуры.
  */
 public final class UiRenderer {
     public static final int ICON_ALL = 1;
@@ -28,13 +34,29 @@ public final class UiRenderer {
 
     private static final Style UI_FONT =
             Style.EMPTY.withFont(new StyleSpriteSource.Font(Identifier.of("ami", "ui")));
+    private static final Style SEMIBOLD_FONT =
+            Style.EMPTY.withFont(new StyleSpriteSource.Font(Identifier.of("ami", "ui_semibold")));
     private static final Style BRAND_FONT =
             Style.EMPTY.withFont(new StyleSpriteSource.Font(Identifier.of("ami", "brand")));
+
+    /** Font variants rasterised for each GUI scale: oversample = scale keeps text at native resolution. */
+    private static final Style[] SCALED_UI_FONTS = new Style[5];
+    private static final Style[] SCALED_SEMIBOLD_FONTS = new Style[5];
+
+    /** Текущая область обрезки в логических координатах GUI для SDF-элементов. */
+    private static @Nullable ScreenRect activeScissor;
 
     private UiRenderer() {
     }
 
+    /** Форсирует инициализацию SDF-пайплайна при старте клиента. */
+    public static void init() {
+        SdfRenderer.init();
+    }
+
     public static void submit(DrawContext g, UiDrawList ui, TextRenderer tr) {
+        Deque<ScreenRect> scissors = new ArrayDeque<>();
+        activeScissor = null;
         for (UiCommand command : ui.seal()) {
             switch (command) {
                 case UiCommand.Rect rect ->
@@ -49,11 +71,27 @@ public final class UiRenderer {
                         circle(g, circle.centerX(), circle.centerY(), circle.radius(), circle.color());
                 case UiCommand.Line line ->
                         line(g, line.x1(), line.y1(), line.x2(), line.y2(), line.thickness(), line.color());
-                case UiCommand.PushScissor scissor ->
-                        g.enableScissor(Math.round(scissor.x()), Math.round(scissor.y()),
-                                Math.round(scissor.x() + scissor.width()),
-                                Math.round(scissor.y() + scissor.height()));
-                case UiCommand.PopScissor ignored -> g.disableScissor();
+                case UiCommand.Shadow shadow ->
+                        SdfRenderer.shadow(g, shadow.x(), shadow.y(), shadow.width(), shadow.height(),
+                                shadow.radius(), shadow.blur(), shadow.color(), activeScissor);
+                case UiCommand.PushScissor scissor -> {
+                    int x1 = Math.round(scissor.x());
+                    int y1 = Math.round(scissor.y());
+                    int x2 = Math.round(scissor.x() + scissor.width());
+                    int y2 = Math.round(scissor.y() + scissor.height());
+                    ScreenRect rect = new ScreenRect(x1, y1, x2 - x1, y2 - y1)
+                            .transform(g.getMatrices());
+                    scissors.push(rect);
+                    activeScissor = rect;
+                    g.enableScissor(x1, y1, x2, y2);
+                }
+                case UiCommand.PopScissor ignored -> {
+                    if (!scissors.isEmpty()) {
+                        scissors.pop();
+                    }
+                    activeScissor = scissors.peek();
+                    g.disableScissor();
+                }
                 case UiCommand.Text text ->
                         drawText(g, tr, text.x(), text.y(), text.size(), text.color(), text.value(),
                                 text.align(), text.strong(), false);
@@ -64,6 +102,7 @@ public final class UiRenderer {
                         drawIcon(g, icon.x(), icon.y(), icon.size(), icon.color(), icon.codePoint());
             }
         }
+        activeScissor = null;
     }
 
     // ------------------------------------------------------------------ shapes
@@ -73,28 +112,17 @@ public final class UiRenderer {
             return;
         }
         float r = Math.max(0, Math.min(radius, Math.min(w, h) * 0.5f));
-        int x0 = Math.round(x);
-        int y0 = Math.round(y);
-        int x1 = Math.round(x + w);
-        int y1 = Math.round(y + h);
-        if (x1 <= x0 || y1 <= y0) {
-            return;
-        }
         if (r < 0.5f) {
-            g.fill(x0, y0, x1, y1, color);
+            int x0 = Math.round(x);
+            int y0 = Math.round(y);
+            int x1 = Math.round(x + w);
+            int y1 = Math.round(y + h);
+            if (x1 > x0 && y1 > y0) {
+                g.fill(x0, y0, x1, y1, color);
+            }
             return;
         }
-        int topEnd = Math.min(y1, Math.round(y + r));
-        int bottomStart = Math.max(y0, Math.round(y + h - r));
-        for (int row = y0; row < topEnd; row++) {
-            fillRowSpan(g, x, y, w, h, r, row, color);
-        }
-        if (bottomStart > topEnd) {
-            g.fill(x0, topEnd, x1, bottomStart, color);
-        }
-        for (int row = Math.max(bottomStart, topEnd); row < y1; row++) {
-            fillRowSpan(g, x, y, w, h, r, row, color);
-        }
+        SdfRenderer.fill(g, x, y, w, h, r, color, activeScissor);
     }
 
     private static void gradientRounded(DrawContext g, float x, float y, float w, float h, float radius,
@@ -147,37 +175,7 @@ public final class UiRenderer {
             return;
         }
         float r = Math.max(0, Math.min(radius, Math.min(w, h) * 0.5f));
-        float innerX = x + t;
-        float innerY = y + t;
-        float innerW = w - t * 2;
-        float innerH = h - t * 2;
-        float innerR = Math.max(0, r - t);
-        int y0 = Math.round(y);
-        int y1 = Math.round(y + h);
-        for (int row = y0; row < y1; row++) {
-            float[] outer = rowSpan(x, y, w, h, r, row);
-            if (outer == null) {
-                continue;
-            }
-            float[] inner = innerW > 0 && innerH > 0
-                    ? rowSpan(innerX, innerY, innerW, innerH, innerR, row) : null;
-            int outerLeft = Math.round(outer[0]);
-            int outerRight = Math.round(outer[1]);
-            if (inner == null) {
-                if (outerRight > outerLeft) {
-                    g.fill(outerLeft, row, outerRight, row + 1, color);
-                }
-                continue;
-            }
-            int innerLeft = Math.round(inner[0]);
-            int innerRight = Math.round(inner[1]);
-            if (innerLeft > outerLeft) {
-                g.fill(outerLeft, row, Math.min(innerLeft, outerRight), row + 1, color);
-            }
-            if (outerRight > innerRight) {
-                g.fill(Math.max(innerRight, outerLeft), row, outerRight, row + 1, color);
-            }
-        }
+        SdfRenderer.stroke(g, x, y, w, h, r, t, color, activeScissor);
     }
 
     private static void circle(DrawContext g, float cx, float cy, float radius, int color) {
@@ -190,17 +188,7 @@ public final class UiRenderer {
             g.fill(left, top, left + 1, top + 1, color);
             return;
         }
-        int y0 = Math.round(cy - radius);
-        int y1 = Math.round(cy + radius);
-        for (int row = y0; row < y1; row++) {
-            float dy = (row + 0.5f) - cy;
-            float half = (float) Math.sqrt(Math.max(0.0, radius * radius - dy * dy));
-            int left = Math.round(cx - half);
-            int right = Math.round(cx + half);
-            if (right > left) {
-                g.fill(left, row, right, row + 1, color);
-            }
-        }
+        SdfRenderer.circle(g, cx, cy, radius, color, activeScissor);
     }
 
     private static void line(DrawContext g, float x1, float y1, float x2, float y2,
@@ -247,19 +235,6 @@ public final class UiRenderer {
         return new float[]{x + inset, x + w - inset};
     }
 
-    private static void fillRowSpan(DrawContext g, float x, float y, float w, float h, float r,
-                                    int row, int color) {
-        float[] span = rowSpan(x, y, w, h, r, row);
-        if (span == null) {
-            return;
-        }
-        int left = Math.round(span[0]);
-        int right = Math.round(span[1]);
-        if (right > left) {
-            g.fill(left, row, right, row + 1, color);
-        }
-    }
-
     // ------------------------------------------------------------------ text
 
     private static void drawText(DrawContext g, TextRenderer tr, float x, float y, float size,
@@ -268,10 +243,7 @@ public final class UiRenderer {
         if (value == null || value.isEmpty() || (color >>> 24) == 0 || size <= 0) {
             return;
         }
-        Style style = brand ? BRAND_FONT : UI_FONT;
-        if (strong) {
-            style = style.withBold(true);
-        }
+        Style style = brand ? BRAND_FONT : strong ? semiboldFont() : uiFont();
         Text text = Text.literal(value).setStyle(style);
         float scale = size / (float) tr.fontHeight;
         float textWidth = tr.getWidth(text) * scale;
@@ -281,12 +253,49 @@ public final class UiRenderer {
             case RIGHT -> x - textWidth;
         };
         float drawY = y - tr.fontHeight * scale * 0.5f;
+        // Целые физические пиксели: при дробном сдвиге стебли букв выходят разной толщины.
+        drawX = Math.round(drawX);
+        drawY = Math.round(drawY);
         Matrix3x2fStack matrices = g.getMatrices();
         matrices.pushMatrix();
         matrices.translate(drawX, drawY);
         matrices.scale(scale, scale);
         g.drawText(tr, text, 0, 0, color, false);
         matrices.popMatrix();
+    }
+
+    /** Выбирает вариант шрифта с oversample, равным текущему GUI-масштабу. */
+    private static Style uiFont() {
+        MinecraftClient mc = MinecraftClient.getInstance();
+        int guiScale = mc == null || mc.getWindow() == null ? 1 : mc.getWindow().getScaleFactor();
+        if (guiScale <= 1) {
+            return UI_FONT;
+        }
+        int index = Math.min(4, guiScale);
+        Style cached = SCALED_UI_FONTS[index];
+        if (cached == null) {
+            cached = Style.EMPTY.withFont(new StyleSpriteSource.Font(
+                    Identifier.of("ami", "ui_x" + index)));
+            SCALED_UI_FONTS[index] = cached;
+        }
+        return cached;
+    }
+
+    /** SemiBold-начертание для заголовков: не синтетический bold, а отдельный TTF. */
+    private static Style semiboldFont() {
+        MinecraftClient mc = MinecraftClient.getInstance();
+        int guiScale = mc == null || mc.getWindow() == null ? 1 : mc.getWindow().getScaleFactor();
+        if (guiScale <= 1) {
+            return SEMIBOLD_FONT;
+        }
+        int index = Math.min(4, guiScale);
+        Style cached = SCALED_SEMIBOLD_FONTS[index];
+        if (cached == null) {
+            cached = Style.EMPTY.withFont(new StyleSpriteSource.Font(
+                    Identifier.of("ami", "ui_semibold_x" + index)));
+            SCALED_SEMIBOLD_FONTS[index] = cached;
+        }
+        return cached;
     }
 
     // ------------------------------------------------------------------ icons
