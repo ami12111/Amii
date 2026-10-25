@@ -45,4 +45,16 @@ public abstract class LivingEntityMixin {
             this.jumping = true; // прыжок в этом же тике
         }
     }
+
+    /**
+     * Конец tickMovement(): секция прыжка уже отработала. Если прыжок был, ваниль выставила
+     * jumpingCooldown = 10, по этому признаку модуль подтверждает результат в том же тике
+     * (проверка isOnGround на следующем тике ошибалась: приземление/потолок давали ложный результат).
+     */
+    @Inject(method = "tickMovement", at = @At("TAIL"))
+    private void velocity$confirmJump(CallbackInfo ci) {
+        if ((Object) this instanceof ClientPlayerEntity) {
+            VelocityModule.afterPlayerTick(this.jumpingCooldown);
+        }
+    }
 }
