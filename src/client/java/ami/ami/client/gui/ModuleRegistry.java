@@ -1,6 +1,7 @@
 package ami.ami.client.gui;
 
 import ami.ami.client.render.NoHurtCamModule;
+import ami.ami.client.render.ViewModelModule;
 import ami.ami.client.triggerbot.TriggerBotModule;
 import ami.ami.client.velocity.VelocityConfig;
 import ami.ami.client.velocity.VelocityStats;
@@ -67,7 +68,48 @@ public final class ModuleRegistry {
                             + "while fighting.",
                     () -> NoHurtCamModule.enabled,
                     value -> NoHurtCamModule.enabled = value,
-                    List.of())
+                    List.of()),
+            new ModuleEntry(
+                    "viewmodel", "ViewModel", "VM", ModuleEntry.Category.RENDER,
+                    "Moves, resizes and tilts the item or hand you hold in first person. Every value "
+                            + "starts neutral, so nothing changes until you drag a slider.",
+                    () -> ViewModelModule.enabled,
+                    value -> ViewModelModule.enabled = value,
+                    List.of(
+                            new NumberSetting("X", "Move left and right", -2.0, 2.0, 0.01, 2, "",
+                                    () -> ViewModelModule.x,
+                                    value -> ViewModelModule.x = value),
+                            new NumberSetting("Y", "Move down and up", -2.0, 2.0, 0.01, 2, "",
+                                    () -> ViewModelModule.y,
+                                    value -> ViewModelModule.y = value),
+                            new NumberSetting("Z", "Move away from and toward the camera", -2.0, 2.0, 0.01, 2, "",
+                                    () -> ViewModelModule.z,
+                                    value -> ViewModelModule.z = value),
+                            new NumberSetting("Size", "Scale of the whole model", 0.1, 3.0, 0.05, 2, "x",
+                                    () -> ViewModelModule.size,
+                                    value -> ViewModelModule.size = value),
+                            new NumberSetting("Width", "Stretch along the X axis", 0.1, 3.0, 0.05, 2, "x",
+                                    () -> ViewModelModule.width,
+                                    value -> ViewModelModule.width = value),
+                            new NumberSetting("Height", "Stretch along the Y axis", 0.1, 3.0, 0.05, 2, "x",
+                                    () -> ViewModelModule.height,
+                                    value -> ViewModelModule.height = value),
+                            new NumberSetting("Length", "Stretch along the Z axis, away from the camera",
+                                    0.1, 3.0, 0.05, 2, "x",
+                                    () -> ViewModelModule.length,
+                                    value -> ViewModelModule.length = value),
+                            new NumberSetting("Tilt X", "Rotate around the X axis (pitch)", -180, 180, 1, 0, "°",
+                                    () -> ViewModelModule.tiltX,
+                                    value -> ViewModelModule.tiltX = value),
+                            new NumberSetting("Tilt Y", "Rotate around the Y axis (yaw)", -180, 180, 1, 0, "°",
+                                    () -> ViewModelModule.tiltY,
+                                    value -> ViewModelModule.tiltY = value),
+                            new NumberSetting("Tilt Z", "Rotate around the Z axis (roll)", -180, 180, 1, 0, "°",
+                                    () -> ViewModelModule.tiltZ,
+                                    value -> ViewModelModule.tiltZ = value),
+                            new ActionSetting("Reset", "Put every value back to vanilla", "Reset values",
+                                    ViewModelModule::reset)
+                    ))
     );
 
     private ModuleRegistry() {
