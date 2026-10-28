@@ -1,6 +1,7 @@
 package ami.ami.client.config;
 
 import ami.ami.client.movement.AutoSprintModule;
+import ami.ami.client.render.HitParticle;
 import ami.ami.client.render.JumpCircles;
 import ami.ami.client.render.NoHurtCamModule;
 import ami.ami.client.render.NoRenderModule;
@@ -40,7 +41,8 @@ public final class ModuleSettings {
             NoHurtCamModule.class,
             NoRenderModule.class,
             AutoSprintModule.class,
-            JumpCircles.class);
+            JumpCircles.class,
+            HitParticle.class);
 
     private ModuleSettings() {
     }
