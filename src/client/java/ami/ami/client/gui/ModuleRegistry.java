@@ -1,6 +1,7 @@
 package ami.ami.client.gui;
 
 import ami.ami.client.movement.AutoSprintModule;
+import ami.ami.client.render.HitParticle;
 import ami.ami.client.render.JumpCircles;
 import ami.ami.client.render.NoHurtCamModule;
 import ami.ami.client.render.NoRenderModule;
@@ -162,6 +163,68 @@ public final class ModuleRegistry {
                             new NumberSetting("Размер", "Общий множитель размера", 0.25, 3.0, 0.05, 2, "x",
                                     () -> JumpCircles.scale,
                                     value -> JumpCircles.scale = (float) value)
+                    )),
+            new ModuleEntry(
+                    "hitparticle", "Hit Particle", "HP", ModuleEntry.Category.RENDER,
+                    "Шейдерные частицы при ударе: ослепительная вспышка, призматическая ударная "
+                            + "волна, искры-кометы, граненые кристаллические осколки, тлеющие огоньки "
+                            + "и энергетический дым. Криты и добивания получают усиленный взрыв со "
+                            + "вращающейся звездой. Эффект появляется только когда удар нанёс урон.",
+                    () -> HitParticle.enabled,
+                    value -> HitParticle.enabled = value,
+                    List.of(
+                            new BoolSetting("Игроки", "Частицы при ударе по игрокам",
+                                    () -> HitParticle.targetPlayers,
+                                    value -> HitParticle.targetPlayers = value),
+                            new BoolSetting("Монстры", "Частицы при ударе по враждебным мобам",
+                                    () -> HitParticle.targetMonsters,
+                                    value -> HitParticle.targetMonsters = value),
+                            new BoolSetting("Животные и прочие", "Частицы при ударе по мирным существам",
+                                    () -> HitParticle.targetAnimals,
+                                    value -> HitParticle.targetAnimals = value),
+                            new BoolSetting("Усиление крита", "Звезда и большая волна при крите и добивании",
+                                    () -> HitParticle.critBurst,
+                                    value -> HitParticle.critBurst = value),
+                            new BoolSetting("Ударная волна", "Кольцо, расходящееся от точки удара",
+                                    () -> HitParticle.shockwave,
+                                    value -> HitParticle.shockwave = value),
+                            new BoolSetting("Осколки", "Кристаллические осколки, разлетающиеся при ударе",
+                                    () -> HitParticle.shards,
+                                    value -> HitParticle.shards = value),
+                            new BoolSetting("Радуга", "Плавно менять оттенок вместо фиксированных цветов",
+                                    () -> HitParticle.rainbow,
+                                    value -> HitParticle.rainbow = value),
+                            new NumberSetting("Оттенок: основной", "Вспышка, волна и искры",
+                                    0, 359, 1, 0, "°",
+                                    () -> HitParticle.hueOf(HitParticle.primaryColor),
+                                    value -> HitParticle.primaryColor = HitParticle.colorFromHue(value)),
+                            new NumberSetting("Оттенок: акцент", "Осколки, дым и часть искр",
+                                    0, 359, 1, 0, "°",
+                                    () -> HitParticle.hueOf(HitParticle.accentColor),
+                                    value -> HitParticle.accentColor = HitParticle.colorFromHue(value)),
+                            new NumberSetting("Оттенок: крит", "Звезда и волна при крите",
+                                    0, 359, 1, 0, "°",
+                                    () -> HitParticle.hueOf(HitParticle.critColor),
+                                    value -> HitParticle.critColor = HitParticle.colorFromHue(value)),
+                            new NumberSetting("Количество", "Множитель количества частиц",
+                                    0.25, 2.0, 0.05, 2, "x",
+                                    () -> HitParticle.density,
+                                    value -> HitParticle.density = (float) value),
+                            new NumberSetting("Размер", "Общий множитель размера", 0.25, 3.0, 0.05, 2, "x",
+                                    () -> HitParticle.scale,
+                                    value -> HitParticle.scale = (float) value),
+                            new NumberSetting("Длительность", "Множитель длительности эффекта",
+                                    0.4, 2.0, 0.05, 2, "x",
+                                    () -> HitParticle.duration,
+                                    value -> HitParticle.duration = (float) value),
+                            new ActionSetting("Предпросмотр", "Показать эффект перед собой (крит и обычный по очереди)",
+                                    "Показать", HitParticle::spawnPreview),
+                            new ActionSetting("Сброс цветов", "Вернуть цвета по умолчанию", "Сбросить",
+                                    () -> {
+                                        HitParticle.primaryColor = HitParticle.DEFAULT_PRIMARY;
+                                        HitParticle.accentColor = HitParticle.DEFAULT_ACCENT;
+                                        HitParticle.critColor = HitParticle.DEFAULT_CRIT;
+                                    })
                     )),
             new ModuleEntry(
                     "viewmodel", "ViewModel", "VM", ModuleEntry.Category.RENDER,
